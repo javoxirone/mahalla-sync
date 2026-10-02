@@ -1,0 +1,59 @@
+name: mahalla-sync-dev
+
+x-app: &app
+  image: mahalla-sync:development
+  environment:
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: ${DEV_POSTGRES_DB:-mahalla_sync_dev}
+    POSTGRES_USER: ${DEV_POSTGRES_USER:-mahalla_dev}
+    POSTGRES_PASSWORD: ${DEV_POSTGRES_PASSWORD:-mahalla-dev}
+    DJANGO_SECRET_KEY: development-only-mahalla-sync
+    DJANGO_DEBUG: "1"
+    DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,[::1]
+  volumes:
+    - .:/app
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DEV_POSTGRES_DB:-mahalla_sync_dev}
+      POSTGRES_USER: ${DEV_POSTGRES_USER:-mahalla_dev}
+      POSTGRES_PASSWORD: ${DEV_POSTGRES_PASSWORD:-mahalla-dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    <<: *app
+    build:
+      context: .
+      target: development
+    command: ["sh", "-c", "python manage.py migrate --noinput && exec python manage.py runserver 0.0.0.0:8000"]
+    ports:
+      - "127.0.0.1:${DEV_WEB_PORT:-8001}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/mahallas/?page_size=1', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 20s
+
+  scheduler:
+    <<: *app
+    pull_policy: never
+    command: ["python", "manage.py", "sync_mahallas", "--watch"]
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

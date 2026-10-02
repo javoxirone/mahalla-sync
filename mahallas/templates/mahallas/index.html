@@ -1,0 +1,53 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Uzbekistan Mahallas · Mahalla Sync</title>
+  <link rel="stylesheet" href="{% static 'mahallas/style.css' %}">
+  <script src="{% static 'mahallas/app.js' %}" defer></script>
+</head>
+<body>
+  <header class="topbar"><div class="container brand"><span class="brand-mark" aria-hidden="true">M</span> Mahalla Sync <span class="subtle">Uzbekistan directory</span></div></header>
+  <main class="container">
+    <div class="heading">
+      <div><p class="eyebrow">NATIONAL MAHALLA DIRECTORY</p><h1>Uzbekistan Mahallas</h1><p class="subtle">A local copy of the unified mahalla classifier.</p></div>
+      <form id="sync-form" action="{% url 'sync-now' %}" method="post">
+        {% csrf_token %}<button id="sync-button" type="submit">Synchronize Now</button>
+      </form>
+    </div>
+    <p id="sync-message" role="status" aria-live="polite" hidden></p>
+    <section class="stats" aria-label="Synchronization overview">
+      <article><p class="label">TOTAL MAHALLAS</p><p class="stat-number">{{ total }}</p><span class="subtle">{{ active_total }} active records</span></article>
+      <article><p class="label">LAST SYNCHRONIZATION</p><p class="stat-value">{% if latest_sync %}{{ latest_sync.started_at|date:"d M Y · H:i:s" }}{% else %}Not synchronized yet{% endif %}</p><span class="subtle">Asia/Tashkent · UTC+5</span></article>
+      <article><p class="label">SYNC STATUS</p><p class="stat-value"><span class="badge {{ latest_sync.status|default:'pending' }}">{{ latest_sync.get_status_display|default:"Waiting for first sync" }}</span></p><span class="subtle">{% if latest_sync.finished_at %}Completed in {{ latest_sync.duration|floatformat:1 }} seconds{% else %}Automatic check interval: 1 minute{% endif %}</span></article>
+    </section>
+    {% if latest_sync.error_message %}<p class="notice error" role="alert">{{ latest_sync.error_message }} Your previously synchronized data remains available.</p>{% endif %}
+    <section class="directory" aria-label="Mahalla directory">
+      <div class="section-heading"><h2>Mahalla directory</h2><span class="subtle">{{ page.paginator.count }} matching records</span></div>
+      <form class="filters" method="get" action="{% url 'index' %}">
+        <div class="search-field"><label for="search">Search mahalla</label><input id="search" name="search" type="search" value="{{ request.GET.search }}" placeholder="Search by name…"></div>
+        <div><label for="region">Region · SOATO</label><select id="region" name="region"><option value="">All regions</option>{% for region in regions %}<option value="{{ region }}" {% if request.GET.region == region %}selected{% endif %}>{{ region }}</option>{% endfor %}</select></div>
+        <div><label for="district">District · SOATO</label><select id="district" name="district"><option value="">All districts</option>{% for district in districts %}<option value="{{ district }}" {% if request.GET.district == district %}selected{% endif %}>{{ district }}</option>{% endfor %}</select></div>
+        <button type="submit" class="secondary">Apply filters</button><a class="reset" href="{% url 'index' %}">Reset</a>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Mahalla</th><th>TIN / STIR</th><th>Region</th><th>District</th><th>Status</th></tr></thead>
+        <tbody>{% for mahalla in page %}<tr><td class="mahalla-name">{{ mahalla.name }}</td><td class="code">{{ mahalla.external_id }}</td><td class="code">{{ mahalla.region }}</td><td class="code">{{ mahalla.district }}</td><td><span class="record-status {% if mahalla.is_active %}active{% endif %}">{% if mahalla.is_active %}Active{% else %}Inactive{% endif %}</span></td></tr>
+        {% empty %}<tr><td colspan="5" class="empty">{% if total %}No mahallas match these filters.{% else %}No mahallas yet. Choose “Synchronize Now” to load the directory.{% endif %}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      <nav class="pagination" aria-label="Pagination"><span class="subtle">Showing {{ page.start_index }}–{{ page.end_index }} of {{ page.paginator.count }}</span><div>
+        {% if page.has_previous %}<a href="?{{ query_string }}&amp;page={{ page.previous_page_number }}">← Previous</a>{% else %}<span aria-disabled="true">← Previous</span>{% endif %}
+        <span class="page-number">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a href="?{{ query_string }}&amp;page={{ page.next_page_number }}">Next →</a>{% else %}<span aria-disabled="true">Next →</span>{% endif %}
+      </div></nav>
+    </section>
+    <section class="history" aria-label="Recent synchronization history"><div class="section-heading"><h2>Recent synchronizations</h2><a href="{% url 'sync-history' %}">View JSON</a></div>
+      <div class="table-wrap"><table><thead><tr><th>Started · Tashkent</th><th>Status</th><th>Created</th><th>Updated</th><th>Unchanged</th><th>Failed</th><th>Duration</th></tr></thead>
+      <tbody>{% for log in history %}<tr><td>{{ log.started_at|date:"d M · H:i:s" }}</td><td><span class="badge {{ log.status }}">{{ log.get_status_display }}</span></td><td>{{ log.created_count }}</td><td>{{ log.updated_count }}</td><td>{{ log.unchanged_count }}</td><td>{{ log.failed_count }}</td><td>{% if log.finished_at %}{{ log.duration|floatformat:1 }}s{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="empty">Your synchronization history will appear here.</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+    <footer><span>Source: <a href="https://cs.egov.uz/#/tableData/65d3205dcb6031b39c078af7" target="_blank" rel="noopener noreferrer">cs.egov.uz ↗</a></span><span>Region and district values are official SOATO codes.</span></footer>
+  </main>
+</body>
+</html>
